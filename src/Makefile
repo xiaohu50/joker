@@ -1,17 +1,30 @@
-.PHONY: demo, test, clean, clean_all
+.PHONY: demo  test  clean  clean_all segmentation
 
 demo: main.c 
 	g++ main.c -c -o demo.o
 	g++ demo.o -o demo -lopencv_highgui -lopencv_core -lopencv_imgproc
 
+segmentation: sg.c
+	g++ sg.c -o sg -lopencv_highgui -lopencv_core -lopencv_imgproc -DDEBUG
 
-test: test.c
-	g++ test.c -o test -lopencv_highgui -lopencv_core -lopencv_imgproc
+test: test1 test2 test3 test4
+
+test1: test1.c
+	g++ test1.c -o test1 -lopencv_highgui -lopencv_core -lopencv_imgproc
+
+test2: test2.c
+	g++ test2.c -o test2 -lopencv_highgui -lopencv_core -lopencv_imgproc
+
+test3: test3.c
+	g++ test3.c -o test3 -lopencv_highgui -lopencv_core -lopencv_imgproc
+
+test4: test4.c
+	g++ test4.c -o test4 -lopencv_highgui -lopencv_core -lopencv_imgproc -DDEBUG
 
 clean: 
 	rm -f *.o
 
 clean_all:
 	rm -f *.o
-	rm -f test
+	rm -f test1 test2 
 	rm -f demo
