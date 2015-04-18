@@ -21,19 +21,26 @@ int compareDescendingF(const void* a, const void* b){
 	if(x<y)return 1;
 	return 0;
 }
+
+
 /* *
  * hist: the histogram handle, only support CV_HIST_ARRAY
  * scale: the scale you want to keep
  * order: order the node in increasing order or not
  * */
-void jkThreshHist_2D(CvHistogram* hist, const double scale, const int order){
-	if(hist == NULL || scale > 1 || scale < 0)return;
-	if(!(order == DESCENDING_ORDER || order == ASCENDING_ORDER))return;
+int jkThreshHist2D(CvHistogram* hist, const double scale, const int order){
+	if(hist == NULL || scale > 1 || scale < 0)return -1;
+	if(!(order == DESCENDING_ORDER || order == ASCENDING_ORDER))return -1;
 	int dims = hist->mat.dims;
-	if(dims!=2)return;
+	if(dims!=2)return -1;
 
 #ifdef DEBUG
 	printf("-----------------jkThreshHist message-----------------------\n");
+	if(order == ASCENDING_ORDER){
+		printf("type: ASCENDING_ORDER\n");
+	}else{
+		printf("type: DESCENDING_ORDER\n");
+	}
 #endif
 	int dimx=hist->mat.dim[0].size;
 	int dimy=hist->mat.dim[1].size;
@@ -91,8 +98,52 @@ void jkThreshHist_2D(CvHistogram* hist, const double scale, const int order){
 	}
 #ifdef DEBUG
 	printf("change %d nodes\n", count);
+	printf("----------------------------end-----------------------------\n\n");
 #endif
 	delete bf;
+	return 0;
+}
+
+/* *
+ * will create CvMat header for mat_tmp in this function
+ * hist should been normalized first!
+ * */
+int jkGetCvmatFromHist(const CvHistogram* hist, CvMat** mat){
+	int dims = hist->mat.dims;
+	if(dims != 2) return -1;
+
+	int rows = hist->mat.dim[0].size;
+	int cols = hist->mat.dim[1].size;
+	*mat = cvCreateMat(rows, cols, CV_32FC1);
+	cvSetZero(*mat);
+	float bin_value;
+	for(int i=0; i<rows; i++){
+		for(int j=0; j<cols; j++){
+			bin_value = cvQueryHistValue_2D(hist, i, j);
+			*((float *)CV_MAT_ELEM_PTR(**mat, i, j)) = bin_value;
+		}
+	}
+
+	return 0;
+}
+
+int jkSetCvMat2Hist(CvHistogram* hist, const CvMat* mat){
+	int dims = hist->mat.dims;
+	if(dims != 2) return -1;
+
+	int rows = hist->mat.dim[0].size;
+	int cols = hist->mat.dim[1].size;
+	float bin_value;
+	float* needle;
+	for(int i=0; i<rows; i++){
+		for(int j=0; j<cols; j++){
+			bin_value = *((float *)CV_MAT_ELEM_PTR(*mat, i, j));
+			needle = cvGetHistValue_2D(hist, i, j);
+			*needle = bin_value;
+		}
+	}
+
+	return 0;
 }
 
 int main( int argc, char** argv ){
@@ -100,16 +151,20 @@ int main( int argc, char** argv ){
 	cvNamedWindow("Picture-in", CV_WINDOW_AUTOSIZE);
 	cvShowImage("Picture-in", src);
 
+	//cvSmooth(src, src, CV_GAUSSIAN, 3, 3);
+	cvNamedWindow("gaussian smooth", CV_WINDOW_AUTOSIZE);
+	cvShowImage("gaussian smooth", src);
+
 	IplImage* hsv = cvCreateImage(cvGetSize(src), 8, 3);
 	cvCvtColor(src, hsv, CV_BGR2HSV);
 
 	IplImage* h_plane = cvCreateImage(cvGetSize(src), 8, 1);
 	IplImage* s_plane = cvCreateImage(cvGetSize(src), 8, 1);
 	IplImage* v_plane = cvCreateImage(cvGetSize(src), 8, 1);
-	IplImage* planes[] = {h_plane, s_plane};
+	IplImage* planes[] = {h_plane, v_plane};
 	cvSplit(hsv, h_plane, s_plane, v_plane, 0);
 
-	int h_bins = 180, s_bins = 256;
+	int h_bins = 180, s_bins = 100;
 	CvHistogram* hist;
 	
 	{
@@ -127,12 +182,21 @@ int main( int argc, char** argv ){
 	}
 	
 	cvCalcHist(planes, hist, 0, 0);
-	cvThreshHist(hist, 10);
-	jkThreshHist_2D(hist, 0.95, ASCENDING_ORDER);
-	jkThreshHist_2D(hist, 0.8, DESCENDING_ORDER);
+	//cvThreshHist(hist, 20);
 	cvNormalizeHist(hist, 1.0);
 
-	int scale = 2;
+	/*	
+	CvMat* mat_tmp;
+	jkGetCvmatFromHist(hist, &mat_tmp);// need no create CvMat header for mat_tmp
+	cvSmooth(mat_tmp, mat_tmp, CV_GAUSSIAN, 3, 3);//note: not all smooth method support in place(src=dst)
+	jkSetCvMat2Hist(hist, mat_tmp); 
+	cvReleaseMat(&mat_tmp);
+
+	jkThreshHist2D(hist, 0.9, DESCENDING_ORDER);
+	*/
+	
+
+	int scale = 4;
 	IplImage* hist_img = cvCreateImage(
 			cvSize(h_bins * scale, s_bins * scale),
 			8,
@@ -167,6 +231,7 @@ int main( int argc, char** argv ){
 
 	cvWaitKey(0);
 	cvDestroyWindow("Picture-in");
+	cvDestroyWindow("gaussian smooth");
 	cvDestroyWindow("h-s histogram");
 	return 0;
 }
