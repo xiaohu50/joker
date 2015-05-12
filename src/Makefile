@@ -1,4 +1,4 @@
-.PHONY: demo  test  clean  clean_all seg
+.PHONY: demo  test  clean  clean_all seg jk
 
 demo: main.c 
 	g++ main.c -c -o demo.o
@@ -6,6 +6,9 @@ demo: main.c
 
 seg: seg.c
 	g++ seg.c -o seg -lopencv_highgui -lopencv_core -lopencv_imgproc -DDEBUG
+
+jk: jkColorCluster.c
+	g++ jkColorCluster.c -o jk -lopencv_highgui -lopencv_core -lopencv_imgproc -DDEBUG
 
 test: test1 test2 test3 test4
 
