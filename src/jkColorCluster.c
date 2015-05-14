@@ -4,18 +4,170 @@
 #include "opencv/highgui.h"
 #include "joke.h"
 
-#define CVX_WHITE  CV_RGB(255, 255, 255)
-#define CVX_RED  CV_RGB(255, 0, 0)
-#define CVX_BLUE  CV_RGB(0, 0, 255)
-
 void jkReleaseArrList(JkArrList* list){
 }
-bool jkCharJudge(CvArr* mat){
-	cvNamedWindow("each mask", 0);
-	cvShowImage("each mask", mat);
+
+void jkReleaseBox2DList(JkBox2DList* list){
+}
+
+void jkShowBox2D(CvArr* img, CvBox2D box){
+	printf("center:%f, %f\n",box.center.x, box.center.y);	
+	printf("size: width:%f, height:%f\n", box.size.width, box.size.height);
+	printf("angle:%f\n", box.angle);
+
+	CvPoint2D32f boxPointsf[4];
+	cvBoxPoints(box, boxPointsf);
+	CvPoint points[4];
+	for(int i=0; i<4; i++){
+		points[i].x = boxPointsf[i].x;
+		points[i].y = boxPointsf[i].y;
+		printf("x,y=%d,%d\n",points[i].x,points[i].y);
+	}
+	cvLine(img, points[0], points[1], CVX_RED, 1);
+	cvLine(img, points[1], points[2], CVX_RED, 1);
+	cvLine(img, points[2], points[3], CVX_RED, 1);
+	cvLine(img, points[3], points[0], CVX_RED, 1);
+
+}
+
+bool JkBoxSizeSuitable(CvBox2D* box, const IplImage* img){
+	float img_min = MIN(img->width, img->height);
+	float box_min = MIN(box->size.width, box->size.height);
+	if(box_min>10 && box_min>img_min/10){
+		return true;
+	}
+
+	return false;
+}
+
+void jkInsertPoint2BoxList(JkBox2DList* box_list, CvPoint p){
+	for(JkBox2DList* box_list_p=box_list; box_list_p!=NULL; box_list_p = box_list_p->next){
+		if(box_list_p->box){
+
+		}
+	}
+}
+
+bool jkCharJudgeBox(JkBox2DList* box_list, IplImage* img){
+	for(JkBox2DList* node = box_list; node!=NULL; node = node->next){
+		CvBox2D* boxp = node->box;
+		if(!JkBoxSizeSuitable(boxp, img)){
+			free(boxp);
+			node->box = NULL;
+		}
+	}
+
+	IplImage* img_8uc1 = cvCreateImage(cvGetSize(img), IPL_DEPTH_8U, 1);
+	IplImage* eigImage = cvCreateImage(cvGetSize(img), IPL_DEPTH_32F, 1);
+	IplImage* tempImage = cvCloneImage(eigImage);
+	const int MAX_CORNER_COUNT=1000;
+	CvPoint2D32f* corners = new CvPoint2D32f[MAX_CORNER_COUNT];
+	int corner_count = MAX_CORNER_COUNT;
+	cvCvtColor(img, img_8uc1, CV_RGB2GRAY);
+
+	cvGoodFeaturesToTrack(
+			img_8uc1,
+			eigImage,
+			tempImage,
+			corners,
+			&corner_count,
+			0.01, //quality_level
+			3, //min_distance
+			NULL, //mask
+			3, //block_size
+			0, //use_harris
+			0.4 //k
+			);
+
+	for(int i=0; i<corner_count; i++){
+		CvPoint cornerPoint = cvPoint((int)corners[i].x, (int)corners[i].y);
+		cvCircle(img, cornerPoint, 1, CVX_RED, 1, 8);	
+		jkInsertPoint2BoxList(box_list, cornerPoint);
+	}
+
+	cvNamedWindow("eigImage", 0);
+	cvShowImage("eigImage", eigImage);
+	cvNamedWindow("mask layer with corner", 0);
+	cvShowImage("mask layer with corner", img);
 
 	cvWaitKey(0);
-	cvDestroyWindow("each mask");
+	cvDestroyWindow("mask layer with corner");
+	cvDestroyWindow("eigImage");
+
+	cvReleaseImage(&img_8uc1);
+	cvReleaseImage(&eigImage);
+	cvReleaseImage(&tempImage);
+}
+
+bool jkCharJudge(CvMat* mat, IplImage* img){
+	CvMat* mat_tmp = cvCloneMat(mat);
+	cvDilate(mat_tmp, mat_tmp, NULL, 2);
+	cvErode(mat_tmp, mat_tmp, NULL, 3);
+	cvDilate(mat_tmp, mat_tmp, NULL, 3);
+
+	cvNamedWindow("mask use to contours", 0);
+	cvShowImage("mask use to contours", mat_tmp);
+
+	cvWaitKey(0);
+	cvDestroyWindow("mask use to contours");
+
+
+	CvMemStorage* storage = cvCreateMemStorage(0);
+	CvSeq* first_contour = NULL;
+	CvMat* mat_tmp2 = cvCloneMat(mat_tmp);
+	int Nc = cvFindContours(mat_tmp2, storage, &first_contour, sizeof(CvContour), CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
+	cvReleaseMat(&mat_tmp2);
+
+	JkBox2DList* box_list=NULL;
+	JkBox2DList* box_list_tail=NULL;
+	for(CvSeq* c = first_contour; c!=NULL; c=c->h_next){
+		CvBox2D box = cvMinAreaRect2(c);
+		JkBox2DList* node = (JkBox2DList*)malloc(sizeof(JkBox2DList));
+		CvBox2D* boxp = (CvBox2D*)malloc(sizeof(CvBox2D));
+		memcpy(boxp, &box, sizeof(CvBox2D));
+		node->box = boxp;
+		cvBoxPoints(box, node->boxPointsf);
+		node->next = NULL;
+
+		if(box_list){
+			box_list_tail->next = node;
+			box_list_tail = node;
+		}else{
+			box_list = node;
+			box_list_tail = box_list;
+		}
+	}
+	bool hasChar = jkCharJudgeBox(box_list, img);
+	jkReleaseBox2DList(box_list);
+	cvReleaseMat(&mat_tmp);
+
+	return hasChar;
+}
+
+/* *
+ *
+ * img should be 3 channels, 8 depth
+ * mask should be 1 channel, 8 depth
+ *
+ * */
+IplImage* jkGetLayerFromMask(IplImage* img, CvMat* mask){
+	if(img->nChannels != 3)return NULL;
+	if(img->depth != 8)return NULL;
+
+	IplImage* layer = cvCloneImage(img);
+	for(int i=0; i<img->height; i++){
+		uchar* ptr_layer = (uchar*)(layer->imageData + i * img->widthStep);
+		uchar* ptr_mask = mask->data.ptr + (i+1) * mask->step;
+		for(int j=0; j<img->width; j++){
+			if(ptr_mask[j+1]==0){
+				ptr_layer[3*j]=0;
+				ptr_layer[3*j+1]=0;
+				ptr_layer[3*j+2]=0;
+			}	
+		}
+	}
+
+	return layer;
 }
 
 IplImage* jkCharPick(IplImage* src){
@@ -36,10 +188,16 @@ IplImage* jkCharPick(IplImage* src){
 	JkArrList* mask_list = jkColorCluster(img_tmp);
 	CvMat* mask = cvCreateMat(img_tmp->height+2, img_tmp->width+2, CV_8UC1);
 	cvSetZero(mask);
+	
+	IplImage* img_layer;
 	for(JkArrList* node = mask_list; node != NULL; node = node->next){
-		if(jkCharJudge(node->arr)){
+		img_layer = jkGetLayerFromMask(img_tmp, (CvMat*)(node->arr));
+		cvNamedWindow("img_layer", 0);
+		cvShowImage("img_layer", img_layer);
+		if(jkCharJudge((CvMat*)(node->arr), img_layer)){
 			cvOr(mask, node->arr, mask, NULL);
 		}
+		cvReleaseImage(&img_layer);
 	}
 	jkReleaseArrList(mask_list);
 	cvNamedWindow("mask final", 0);
@@ -94,13 +252,6 @@ JkArrList* jkColorCluster(IplImage* src){
 							jkScalarDiff(seed, seed_inner, &diff2);
 							if(jkScalarBigger(loDiff_color, diff2)>=0 
 									&& jkScalarBigger(upDiff_color, diff1)>=0){
-								/*
-								printf("x=%d,y=%d",x,y);
-								jkShowScalar(seed_inner);
-								jkShowScalar(seed);
-								jkShowScalar(diff1);
-								jkShowScalar(diff2);
-								*/
 								cvSetZero(mask_zero);
 								CvPoint seedPoint = cvPoint(y, x);
 								cvFloodFill(src, 
