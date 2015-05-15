@@ -1,4 +1,5 @@
 #include<stdio.h>
+#include<strings.h>
 #include "opencv/cv.h"
 #include "opencv/cvaux.h"
 #include "opencv/highgui.h"
@@ -10,23 +11,26 @@ void jkReleaseArrList(JkArrList* list){
 void jkReleaseBox2DList(JkBox2DList* list){
 }
 
-void jkShowBox2D(CvArr* img, CvBox2D box){
+void jkBox2DDetail(CvBox2D box){
 	printf("center:%f, %f\n",box.center.x, box.center.y);	
 	printf("size: width:%f, height:%f\n", box.size.width, box.size.height);
 	printf("angle:%f\n", box.angle);
+}
 
+void jkShowBox2D(CvArr* img, CvBox2D box){
+	jkBox2DDetail(box);
 	CvPoint2D32f boxPointsf[4];
 	cvBoxPoints(box, boxPointsf);
 	CvPoint points[4];
 	for(int i=0; i<4; i++){
 		points[i].x = boxPointsf[i].x;
 		points[i].y = boxPointsf[i].y;
-		printf("x,y=%d,%d\n",points[i].x,points[i].y);
+		printf("boxPoint[%d]=(x,y)=%d,%d\n",i,points[i].x,points[i].y);
 	}
-	cvLine(img, points[0], points[1], CVX_RED, 1);
-	cvLine(img, points[1], points[2], CVX_RED, 1);
-	cvLine(img, points[2], points[3], CVX_RED, 1);
-	cvLine(img, points[3], points[0], CVX_RED, 1);
+	cvLine(img, points[0], points[1], CVX_RED, 2);
+	cvLine(img, points[1], points[2], CVX_BLUE, 2);
+	cvLine(img, points[2], points[3], CVX_GREEN, 2);
+	cvLine(img, points[3], points[0], CVX_WHITE, 2);
 
 }
 
@@ -41,19 +45,122 @@ bool JkBoxSizeSuitable(CvBox2D* box, const IplImage* img){
 }
 
 void jkInsertPoint2BoxList(JkBox2DList* box_list, CvPoint p){
+	float w,h;
+	float cx,cy;
+	float sinTheta, cosTheta;
+	float x = p.x;
+	float y = p.y;
+			printf("point(x,y)=%f,%f\n",x,y);
+	CvBox2D* box;
 	for(JkBox2DList* box_list_p=box_list; box_list_p!=NULL; box_list_p = box_list_p->next){
 		if(box_list_p->box){
+			box = box_list_p->box;
+			sinTheta = box_list_p->sinTheta;
+			cosTheta = box_list_p->cosTheta;
+			cx = box->center.x;
+			cy = box->center.y;
+			w = (cx-x)*sinTheta - (cy-y)*cosTheta;
+			h = (cx-x)*cosTheta + (cy-y)*sinTheta;
 
+			w = 2.0f - 4.0f*w/(box->size.width);
+			h = 2.0f - 4.0f*h/(box->size.height);
+			if(w>=0 && w<=4 && h>=0 && h<=4){
+#ifdef DEBUG
+				printf("*********************box corner**********************\n");
+				jkBox2DDetail(*box);
+				printf("w,h,4h+w:%f,%f,%d\n",w,h,4*(int)h+(int)w);
+				printf("*****************************************************\n");
+#endif
+				box_list_p->corners[4*(int)h+(int)w]+=1;
+			}
 		}
 	}
 }
 
+bool jkBoxCornerFlat(JkBox2DList* node){
+	bool is_flat = true;
+	int* s1 = node->corners;
+	int* s2 = new int[9];
+	int* s3 = new int[4];
+
+	double s1a = 0, s2a = 0, s3a = 0;
+	for(int i=0; i<3; i++){
+		for(int j=0; j<3; j++){
+			s2[3*i+j] = s1[4*i+j] + s1[4*i+j+1] 
+				+ s1[4*(i+1)+j] + s1[4*(i+1)+j+1];
+			s2a += s2[3*i+j];
+		}
+	}
+	s2a = s2a / 9.0f;
+
+	for(int i=0; i<2; i++){
+		for(int j=0; j<2; j++){
+			s3[2*i+j] = s1[4*i+j] + s1[4*i+j+1] + s1[4*i+j+2]
+				+ s1[4*(i+1)+j] + s1[4*(i+1)+j+1] + s1[4*(i+1)+j+2]
+				+ s1[4*(i+2)+j] + s1[4*(i+2)+j+1] + s1[4*(i+2)+j+2];
+			s3a += s3[2*i+j];
+		}
+	}
+	s3a = s3a / 4.0f;
+
+	for(int i=0; i<16; i++){
+		s1a += s1[i];
+	}
+	s1a = s1a / 16.0f;
+
+	if(s1a == 0 || s2a == 0 || s3a == 0)return false;
+
+	double sd1 = 0, sd2 = 0, sd3 = 0;
+	for(int i=0; i<16; i++){
+		printf("s1[%d]=%d\n",i,s1[i]);
+		sd1 += (s1[i]-s1a)*(s1[i]-s1a);
+	}
+	sd1 = sqrt(sd1/16);
+	
+	for(int i=0; i<9; i++){
+		printf("s2[%d]=%d\n",i,s2[i]);
+		sd2 += (s2[i]-s2a)*(s2[i]-s2a);
+	}
+	sd2 = sqrt(sd2/9);
+
+	for(int i=0; i<4; i++){
+		printf("s3[%d]=%d\n",i,s3[i]);
+		sd3 += (s3[i]-s3a)*(s3[i]-s3a);
+	}
+	sd3 = sqrt(sd3/9);
+
+	printf("sd1,s1a=%f,%f,%f\n",sd1,s1a,sd1/s1a);
+	printf("sd2,s2a=%f,%f,%f\n",sd2,s2a,sd2/s2a);
+	printf("sd3,s3a=%f,%f,%f\n",sd3,s3a,sd3/s3a);
+	double score = (sd1/s1a) + (sd2/s2a) + (sd3/s3a);
+	if(score>10){
+		is_flat = false;
+		printf("not flat, score:%f\n",score);
+	}else{
+		is_flat = true;
+		printf("flat, score:%f\n",score);
+	}
+
+	delete[] s2;
+	delete[] s3;
+
+
+	return is_flat;
+	
+}
 bool jkCharJudgeBox(JkBox2DList* box_list, IplImage* img){
+	bool has_char = false;
 	for(JkBox2DList* node = box_list; node!=NULL; node = node->next){
 		CvBox2D* boxp = node->box;
 		if(!JkBoxSizeSuitable(boxp, img)){
 			free(boxp);
 			node->box = NULL;
+		}else{
+			int* corners = (int*)malloc(sizeof(int)*16);
+			bzero(corners, sizeof(int)*16);
+			node->corners = corners;
+			node->sinTheta = sin(boxp->angle * CV_PI /180);
+			node->cosTheta = cos(boxp->angle * CV_PI /180);
 		}
 	}
 
@@ -80,19 +187,26 @@ bool jkCharJudgeBox(JkBox2DList* box_list, IplImage* img){
 			);
 
 	for(int i=0; i<corner_count; i++){
+		printf("corner_count=%d,i=%d\n",corner_count,i);
 		CvPoint cornerPoint = cvPoint((int)corners[i].x, (int)corners[i].y);
 		cvCircle(img, cornerPoint, 1, CVX_RED, 1, 8);	
 		jkInsertPoint2BoxList(box_list, cornerPoint);
 	}
 
-	cvNamedWindow("eigImage", 0);
-	cvShowImage("eigImage", eigImage);
+	for(JkBox2DList* box_list_p=box_list; box_list_p!=NULL; box_list_p = box_list_p->next){
+		if(box_list_p->box){
+			if(jkBoxCornerFlat(box_list_p)){
+				jkShowBox2D(img, *(box_list_p->box));
+				has_char = true;
+			}
+		}
+	}
+
 	cvNamedWindow("mask layer with corner", 0);
 	cvShowImage("mask layer with corner", img);
 
 	cvWaitKey(0);
 	cvDestroyWindow("mask layer with corner");
-	cvDestroyWindow("eigImage");
 
 	cvReleaseImage(&img_8uc1);
 	cvReleaseImage(&eigImage);
@@ -126,6 +240,7 @@ bool jkCharJudge(CvMat* mat, IplImage* img){
 		CvBox2D* boxp = (CvBox2D*)malloc(sizeof(CvBox2D));
 		memcpy(boxp, &box, sizeof(CvBox2D));
 		node->box = boxp;
+		node->corners = NULL;
 		cvBoxPoints(box, node->boxPointsf);
 		node->next = NULL;
 
