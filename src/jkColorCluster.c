@@ -17,6 +17,7 @@ void jkBox2DDetail(CvBox2D box){
 	printf("angle:%f\n", box.angle);
 }
 
+
 void jkShowBox2D(CvArr* img, CvBox2D box){
 	jkBox2DDetail(box);
 	CvPoint2D32f boxPointsf[4];
@@ -31,7 +32,6 @@ void jkShowBox2D(CvArr* img, CvBox2D box){
 	cvLine(img, points[1], points[2], CVX_BLUE, 2);
 	cvLine(img, points[2], points[3], CVX_GREEN, 2);
 	cvLine(img, points[3], points[0], CVX_WHITE, 2);
-
 }
 
 bool JkBoxSizeSuitable(CvBox2D* box, const IplImage* img){
@@ -44,37 +44,42 @@ bool JkBoxSizeSuitable(CvBox2D* box, const IplImage* img){
 	return false;
 }
 
-void jkInsertPoint2BoxList(JkBox2DList* box_list, CvPoint p){
+int jkInsertPoint2BoxList(JkBox2DList* box_list, CvPoint p){
 	float w,h;
 	float cx,cy;
 	float sinTheta, cosTheta;
 	float x = p.x;
 	float y = p.y;
-			printf("point(x,y)=%f,%f\n",x,y);
 	CvBox2D* box;
-	for(JkBox2DList* box_list_p=box_list; box_list_p!=NULL; box_list_p = box_list_p->next){
+	int position=0;
+	int index=0;
+	for(JkBox2DList* box_list_p=box_list; box_list_p!=NULL; box_list_p = box_list_p->next, index++){
 		if(box_list_p->box){
 			box = box_list_p->box;
 			sinTheta = box_list_p->sinTheta;
 			cosTheta = box_list_p->cosTheta;
 			cx = box->center.x;
 			cy = box->center.y;
-			w = (cx-x)*sinTheta - (cy-y)*cosTheta;
-			h = (cx-x)*cosTheta + (cy-y)*sinTheta;
+			w = (cx-x)*cosTheta + (cy-y)*sinTheta;
+			h = (cx-x)*sinTheta - (cy-y)*cosTheta;
 
 			w = 2.0f - 4.0f*w/(box->size.width);
 			h = 2.0f - 4.0f*h/(box->size.height);
 			if(w>=0 && w<=4 && h>=0 && h<=4){
 #ifdef DEBUG
+				/*
 				printf("*********************box corner**********************\n");
 				jkBox2DDetail(*box);
 				printf("w,h,4h+w:%f,%f,%d\n",w,h,4*(int)h+(int)w);
 				printf("*****************************************************\n");
+				*/
 #endif
+				position = index;
 				box_list_p->corners[4*(int)h+(int)w]+=1;
 			}
 		}
 	}
+	return position;
 }
 
 bool jkBoxCornerFlat(JkBox2DList* node){
@@ -82,8 +87,26 @@ bool jkBoxCornerFlat(JkBox2DList* node){
 	int* s1 = node->corners;
 	int* s2 = new int[9];
 	int* s3 = new int[4];
+	int* s12h = new int[12];
+	int* s12v = new int[12];
 
-	double s1a = 0, s2a = 0, s3a = 0;
+	double s1a = 0, s2a = 0, s3a = 0, s12ha = 0, s12va = 0, s24a = 0;
+	for(int i=0; i<16; i++){
+		s1a += s1[i];
+	}
+	s1a = s1a / 16.0f;
+
+	double density=0;
+	density = (s1a*16) / (node->box->size.width * node->box->size.height);
+	if(density<0.001){
+		is_flat = false;
+		printf("not flat, density:%f\n",density);
+		return is_flat;
+	}else{
+		is_flat = true;
+		printf("flat, density:%f\n",density);
+	}
+
 	for(int i=0; i<3; i++){
 		for(int j=0; j<3; j++){
 			s2[3*i+j] = s1[4*i+j] + s1[4*i+j+1] 
@@ -103,36 +126,58 @@ bool jkBoxCornerFlat(JkBox2DList* node){
 	}
 	s3a = s3a / 4.0f;
 
-	for(int i=0; i<16; i++){
-		s1a += s1[i];
+
+	for(int i=0; i<4; i++){
+		for(int j=0; j<3; j++){
+			s12h[3*i+j] = s1[4*i+j] + s1[4*i+j+1];
+			s12ha += s12h[3*i+j];
+		}
 	}
-	s1a = s1a / 16.0f;
+	for(int i=0; i<3; i++){
+		for(int j=0; j<4; j++){
+			s12v[4*i+j] = s1[4*i+j] + s1[4*(i+1)+j];
+			s12va += s12v[4*i+j];
+		}
+	}
+	s24a = (s12ha + s12va) / 24.0f;
 
-	if(s1a == 0 || s2a == 0 || s3a == 0)return false;
+	if(s1a == 0 || s2a == 0 || s3a == 0 || s24a == 0)return false;
 
-	double sd1 = 0, sd2 = 0, sd3 = 0;
+	double sd1 = 0, sd2 = 0, sd3 = 0, sd24 = 0;
 	for(int i=0; i<16; i++){
-		printf("s1[%d]=%d\n",i,s1[i]);
+		//printf("s1[%d]=%d\n",i,s1[i]);
 		sd1 += (s1[i]-s1a)*(s1[i]-s1a);
 	}
 	sd1 = sqrt(sd1/16);
 	
 	for(int i=0; i<9; i++){
-		printf("s2[%d]=%d\n",i,s2[i]);
+		//printf("s2[%d]=%d\n",i,s2[i]);
 		sd2 += (s2[i]-s2a)*(s2[i]-s2a);
 	}
 	sd2 = sqrt(sd2/9);
 
 	for(int i=0; i<4; i++){
-		printf("s3[%d]=%d\n",i,s3[i]);
+		//printf("s3[%d]=%d\n",i,s3[i]);
 		sd3 += (s3[i]-s3a)*(s3[i]-s3a);
 	}
 	sd3 = sqrt(sd3/9);
 
+	for(int i=0; i<12; i++){
+		//printf("s12h[%d]=%d\n",i,s12h[i]);
+		sd24 += (s12h[i]-s24a)*(s12h[i]-s24a);
+	}
+	for(int i=0; i<12; i++){
+		//printf("s12v[%d]=%d\n",i,s12v[i]);
+		sd24 += (s12v[i]-s24a)*(s12v[i]-s24a);
+	}
+	sd24 = sqrt(sd24/24);
+
 	printf("sd1,s1a=%f,%f,%f\n",sd1,s1a,sd1/s1a);
 	printf("sd2,s2a=%f,%f,%f\n",sd2,s2a,sd2/s2a);
 	printf("sd3,s3a=%f,%f,%f\n",sd3,s3a,sd3/s3a);
-	double score = (sd1/s1a) + (sd2/s2a) + (sd3/s3a);
+	printf("sd24,s24a=%f,%f,%f\n",sd24,s24a,sd24/s24a);
+
+	double score = (sd1/s1a) + (sd2/s2a) + (sd3/s3a) + (sd24/s24a);
 	if(score>10){
 		is_flat = false;
 		printf("not flat, score:%f\n",score);
@@ -186,11 +231,22 @@ bool jkCharJudgeBox(JkBox2DList* box_list, IplImage* img){
 			0.4 //k
 			);
 
+	int position;
 	for(int i=0; i<corner_count; i++){
-		printf("corner_count=%d,i=%d\n",corner_count,i);
+		//printf("corner_count=%d,i=%d\n",corner_count,i);
 		CvPoint cornerPoint = cvPoint((int)corners[i].x, (int)corners[i].y);
-		cvCircle(img, cornerPoint, 1, CVX_RED, 1, 8);	
-		jkInsertPoint2BoxList(box_list, cornerPoint);
+		position = jkInsertPoint2BoxList(box_list, cornerPoint);
+		if(position == 0){
+			cvCircle(img, cornerPoint, 1, CVX_RED, 1, 8);	
+		}else{
+			cvCircle(img, cornerPoint, 1, CV_RGB(position*position*10 % 255, (position*50) % 255, (position*13) % 255), 1, 8);	
+		}
+		/*
+		cvNamedWindow("pp", 0);
+		cvShowImage("pp", img);
+		cvWaitKey(0);
+		cvDestroyWindow("pp");
+		*/
 	}
 
 	for(JkBox2DList* box_list_p=box_list; box_list_p!=NULL; box_list_p = box_list_p->next){
@@ -198,6 +254,7 @@ bool jkCharJudgeBox(JkBox2DList* box_list, IplImage* img){
 			if(jkBoxCornerFlat(box_list_p)){
 				jkShowBox2D(img, *(box_list_p->box));
 				has_char = true;
+				printf("\n");
 			}
 		}
 	}
