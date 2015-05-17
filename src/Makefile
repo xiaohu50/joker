@@ -1,5 +1,5 @@
 .PHONY: demo  test  clean  clean_all seg jk
-
+CFLAGS=-ggdb -lopencv_highgui -lopencv_core -lopencv_imgproc -DDEBUG
 demo: main.c 
 	g++ main.c -c -o demo.o
 	g++ demo.o -o demo -lopencv_highgui -lopencv_core -lopencv_imgproc
@@ -7,8 +7,16 @@ demo: main.c
 seg: seg.c
 	g++ seg.c -o seg -lopencv_highgui -lopencv_core -lopencv_imgproc -DDEBUG
 
-jk: jkColorCluster.c
-	g++ jkColorCluster.c -o jk -lopencv_highgui -lopencv_core -lopencv_imgproc -DDEBUG
+jk: jkColorCluster.o joke.o
+	g++ jkColorCluster.o joke.o -o jk $(CFLAGS)
+
+jkColorCluster.o: jkColorCluster.c joke.h
+	g++ jkColorCluster.c -c -o jkColorCluster.o $(CFLAGS)
+
+joke.o: joke.c joke.h
+	g++ joke.c -c -o joke.o $(CFLAGS)
+
+
 
 test: test1 test2 test3 test4
 
