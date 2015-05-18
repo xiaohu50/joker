@@ -27,6 +27,7 @@ JkArrList;
 typedef struct JkMatList
 {
 	CvMat* mat;
+	bool has_char;
 	struct JkMatList* next;
 }
 JkMatList;
@@ -37,6 +38,7 @@ typedef struct JkBoxList
 	bool available;
 	CvPoint2D32f boxPointsf[4];
 	int* corners;//length should be 16
+	int* pixels;//length should be 16
 	float sinTheta;
 	float cosTheta;
 	struct JkBoxList* next;
@@ -59,6 +61,7 @@ int jkScalarBigger(const CvScalar a, const CvScalar b);
 int jkScalarDiff(const CvScalar a, const CvScalar b, CvScalar* c);
 CvMat* jkMinus1(CvMat* mat);
 void jkSizeFilterBoxList(IplImage* img, JkBoxList* box_list);
+int jkInsertPoint2BoxList(JkBoxList* box_list, CvPoint p);
 
 
 void jkShowBoxMsg(CvBox2D box);

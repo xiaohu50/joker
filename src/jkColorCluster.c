@@ -8,8 +8,27 @@
 
 
 
-IplImage* jkCharLayer(IplImage* img){
-	bool remain = false;
+JkMatList* jkCharLayer(IplImage* img){
+	/*
+	IplImage* img_8uc1 = cvCreateImage(cvGetSize(img), IPL_DEPTH_8U, 1);
+	IplImage* img_bi = cvCreateImage(cvGetSize(img), IPL_DEPTH_8U, 1);
+	cvCvtColor(img, img_8uc1, CV_RGB2GRAY);
+	cvAdaptiveThreshold(
+			img_8uc1,
+			img_bi,
+			255,
+			CV_ADAPTIVE_THRESH_MEAN_C,
+			CV_THRESH_BINARY_INV,
+			3,
+			5
+			);
+#ifdef DEBUG
+	cvNamedWindow("binaryzation", 0);
+	cvShowImage("binaryzation", img_bi);
+#endif
+	*/
+	
+
 	/********************************** filtering ************************************/
 	IplImage* img_tmp = cvCreateImage(cvGetSize(img), 8, 3);
 	cvPyrMeanShiftFiltering(
@@ -30,8 +49,6 @@ IplImage* jkCharLayer(IplImage* img){
 	JkFeatureLayer* feature_layer = jkFeaturePoint(img);
 
 	/****************************get different color layer****************************/
-	CvMat* mask_final = cvCreateMat(img->height, img->width, CV_8UC1);
-	cvSetZero(mask_final);
 	JkMatList* mask_list = jkGetColorLayer(img);
 	CvMat* mask;
 	for(JkMatList* node = mask_list; node!=NULL; node = node->next){
@@ -40,28 +57,16 @@ IplImage* jkCharLayer(IplImage* img){
 		JkBoxList* box_list = jkGetBox(mask);//get box list for each color layer
 		jkSizeFilterBoxList(img, box_list);
 #ifdef DEBUG
-		jkShowBoxList(img, box_list);
+		//jkShowBoxList(img, box_list);
 #endif
 
-		bool has_char = jkJudgeLayer(img, mask, box_list, feature_layer);//judge whether the layer has characters
-		if(has_char){
-			cvOr(mask, mask_final, mask_final, NULL);
-			remain = true;
-		}
+		node->has_char = jkJudgeLayer(img, mask, box_list, feature_layer);//judge whether the layer has characters
 		jkReleaseBoxList(&box_list);
 	}
-	jkReleaseMatList(&mask_list);
 	jkReleaseFeatureLayer(&feature_layer);
 
-	if(remain){
-		IplImage* img_result = jkMerge(img, mask_final);//change on 'img'
-		cvReleaseMat(&mask_final);
-		return img_result;
-	}
-	cvReleaseMat(&mask_final);
-
 	cvReleaseImage(&img_tmp);
-	return NULL;
+	return mask_list;
 }
 
 #ifdef DEBUG
@@ -71,14 +76,16 @@ int main( int argc, char** argv ){
 	cvNamedWindow("Picture-in", 0);
 	cvShowImage("Picture-in", src);
 
-	IplImage* dst = jkCharLayer(src);
-	if(dst != NULL){
-		cvNamedWindow("result", 0);
-		cvShowImage("result", dst);
-		cvWaitKey(0);
-		cvDestroyWindow("result");
-		cvReleaseImage(&dst);
+	JkMatList* mask_list = jkCharLayer(src);
+	for(JkMatList* node = mask_list; node!=NULL; node = node->next){
+		if(node->has_char){
+			cvNamedWindow("haschar layer", 0);
+			cvShowImage("haschar layer", node->mat);
+			cvWaitKey(0);
+			cvDestroyWindow("haschar layer");
+		}
 	}
+	
 
 	cvWaitKey(0);
 	cvDestroyWindow("Picture-in");
