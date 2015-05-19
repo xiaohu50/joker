@@ -9,26 +9,6 @@
 
 
 JkMatList* jkCharLayer(IplImage* img){
-	/*
-	IplImage* img_8uc1 = cvCreateImage(cvGetSize(img), IPL_DEPTH_8U, 1);
-	IplImage* img_bi = cvCreateImage(cvGetSize(img), IPL_DEPTH_8U, 1);
-	cvCvtColor(img, img_8uc1, CV_RGB2GRAY);
-	cvAdaptiveThreshold(
-			img_8uc1,
-			img_bi,
-			255,
-			CV_ADAPTIVE_THRESH_MEAN_C,
-			CV_THRESH_BINARY_INV,
-			3,
-			5
-			);
-#ifdef DEBUG
-	cvNamedWindow("binaryzation", 0);
-	cvShowImage("binaryzation", img_bi);
-#endif
-	*/
-	
-
 	/********************************** filtering ************************************/
 	IplImage* img_tmp = cvCreateImage(cvGetSize(img), 8, 3);
 	cvPyrMeanShiftFiltering(
@@ -69,26 +49,39 @@ JkMatList* jkCharLayer(IplImage* img){
 	return mask_list;
 }
 
-#ifdef DEBUG
 int main( int argc, char** argv ){
 	IplImage* src = cvLoadImage(argv[1], CV_LOAD_IMAGE_COLOR);
+	IplImage* layer_color;
+	//CvMat* layer = cvCreateMat(src->height, src->width, CV_8UC1);
+	//CvMat* mask = cvCreateMat(src->height, src->width, CV_8UC1);
+	char* name = new char[100];
+	strcpy(name, argv[2]);
+#ifdef DEBUG
 	jkShowImageDetail(src);
 	cvNamedWindow("Picture-in", 0);
 	cvShowImage("Picture-in", src);
+#endif
 
 	JkMatList* mask_list = jkCharLayer(src);
+	int index=0;
+	char* index_c=new char[10];
 	for(JkMatList* node = mask_list; node!=NULL; node = node->next){
 		if(node->has_char){
-			cvNamedWindow("haschar layer", 0);
-			cvShowImage("haschar layer", node->mat);
-			cvWaitKey(0);
-			cvDestroyWindow("haschar layer");
+			layer_color = jkMerge(src, node->mat);
+
+			sprintf(index_c, "_jk%d.jpg", index);
+			strcat(name, index_c);
+			cvSaveImage(name, layer_color);
+			strcpy(name, argv[2]);
+
+			index++;
 		}
 	}
 	
 
+#ifdef DEBUG
 	cvWaitKey(0);
 	cvDestroyWindow("Picture-in");
 	cvReleaseImage(&src);
-}
 #endif
+}

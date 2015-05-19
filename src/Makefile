@@ -1,5 +1,5 @@
 .PHONY: demo  test  clean  clean_all seg jk
-CFLAGS=-ggdb -lopencv_highgui -lopencv_core -lopencv_imgproc -DDEBUG
+CFLAGS=-ggdb -lopencv_highgui -lopencv_core -lopencv_imgproc 
 demo: main.c 
 	g++ main.c -c -o demo.o
 	g++ demo.o -o demo -lopencv_highgui -lopencv_core -lopencv_imgproc
