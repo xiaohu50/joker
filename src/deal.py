@@ -22,12 +22,12 @@ for parent, dirnames, filenames in os.walk(outdir):
             os.system("tesseract %s %s -l chi_sim config.txt"%(os.path.join(parent, filename), outfile_ch))
             if os.path.exists("%s.txt"%outfile_ch):
                 size = os.path.getsize("%s.txt"%outfile_ch)
-                if size==0:
+                if size<=3:
                     os.remove("%s.txt"%outfile_ch)
 
             outfile_en=os.path.join(outdir, prefix_en)
             os.system("tesseract %s %s -l eng config.txt"%(os.path.join(parent, filename), outfile_en))
             if os.path.exists("%s.txt"%outfile_en):
                 size = os.path.getsize("%s.txt"%outfile_en)
-                if size==0:
+                if size<=3:
                     os.remove("%s.txt"%outfile_en)

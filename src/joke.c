@@ -150,6 +150,8 @@ JkMatList* jkGetColorLayer(IplImage* img){
 						}
 					}
 				}
+				//cvErode(mask_layer, mask_zero, NULL, 1);
+				//cvDilate(mask_zero, mask_zero, NULL, 1);
 				cvOr(mask, mask_layer, mask);
 
 				JkMatList* node = (JkMatList*)malloc(sizeof(JkMatList));
@@ -518,8 +520,9 @@ void jkShowImageDetail(IplImage* img){
 
 bool jkBoxSizeSuitable(CvBox2D box, const IplImage* img){
 	float img_min = MIN(img->width, img->height);
+	float img_max = MAX(img->width, img->height);
 	float box_min = MIN(box.size.width, box.size.height);
-	if(box_min>5 && box_min>=img_min/30){
+	if(box_min>5 && box_min>=img_min/30 && box_min<=img_max/2.5){
 		return true;
 	}
 

@@ -1,11 +1,11 @@
 .PHONY: demo  test  clean  clean_all seg jk
-CFLAGS=-ggdb -lopencv_highgui -lopencv_core -lopencv_imgproc 
+CFLAGS=-ggdb -lopencv_highgui -lopencv_core -lopencv_imgproc -DDEBUG
 demo: main.c 
 	g++ main.c -c -o demo.o
 	g++ demo.o -o demo -lopencv_highgui -lopencv_core -lopencv_imgproc
 
 seg: seg.c
-	g++ seg.c -o seg -lopencv_highgui -lopencv_core -lopencv_imgproc -DDEBUG
+	g++ seg.c -o seg -lopencv_highgui -lopencv_core -lopencv_imgproc 
 
 jk: jkColorCluster.o joke.o
 	g++ jkColorCluster.o joke.o -o jk $(CFLAGS)
