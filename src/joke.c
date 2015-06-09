@@ -185,7 +185,7 @@ JkMatList* jkGetColorLayer(IplImage* img){
 
 JkBoxList* jkGetBox(CvMat* mask){
 	CvMat* mat_tmp = cvCloneMat(mask);
-	cvDilate(mat_tmp, mat_tmp, NULL, 2);
+	cvDilate(mat_tmp, mat_tmp, NULL, 1);
 	cvErode(mat_tmp, mat_tmp, NULL, 1);
 	/*
 #ifdef DEBUG
@@ -282,15 +282,8 @@ IplImage* jkGetLayerFromMask(IplImage* img, CvMat* mask){
 bool jkBoxFlat(JkBoxList* node){
 	bool is_flat = true;
 	int* s1 = node->corners;
-	int* s2 = new int[9];
-	int* s3 = new int[4];
-	int* s12h = new int[12];
-	int* s12v = new int[12];
 	int* p1 = node->pixels;
-	int* p2 = new int[9];
-	int* p3 = new int[4];
-	int* p12h = new int[12];
-	int* p12v = new int[12];
+
 
 #ifdef DEBUG
 	printf("~~~~~~~~~~~~~~~~~~~~box  flat info~~~~~~~~~~~~~~~~~~~~~~~\n");
@@ -312,18 +305,53 @@ bool jkBoxFlat(JkBoxList* node){
 	double pixel_density=0;
 	corner_density = (s1a*16) / (node->box.size.width * node->box.size.height);
 	pixel_density = (p1a*16) / (node->box.size.width * node->box.size.height);
-	if(corner_density<0.01){
+	if(pixel_density<0.15){
 		is_flat = false;
 #ifdef DEBUG
-		printf("not flat, corner_density:%f\tpixel_density:%f\n",corner_density, pixel_density);
+		printf("pixel not flat, corner_density:%f\tpixel_density:%f\n",corner_density, pixel_density);
 #endif
 		return is_flat;
 	}else{
 		is_flat = true;
 #ifdef DEBUG
-		printf("flat, corner_density:%f\tpixel_density:%f\n",corner_density, pixel_density);
+		printf("pixel flat, corner_density:%f\tpixel_density:%f\n",corner_density, pixel_density);
 #endif
 	}
+
+	if(node->box.size.width<18 || node->box.size.height<18){
+#ifdef DEBUG
+		printf("xxxxxxxxx this box size is too small, cannot count flat xxxxxxxxxx\n");
+		printf("width=%f, height=%f\n\n",node->box.size.width, node->box.size.height);
+#endif
+		return true;
+	}
+	if(corner_density<0.01){
+		is_flat = false;
+#ifdef DEBUG
+		printf("corner not flat, corner_density:%f\tpixel_density:%f\n",corner_density, pixel_density);
+#endif
+		return is_flat;
+	}else{
+		is_flat = true;
+#ifdef DEBUG
+		printf("corner flat, corner_density:%f\tpixel_density:%f\n",corner_density, pixel_density);
+#endif
+	}
+
+
+
+
+
+
+	int* s2 = new int[9];
+	int* s3 = new int[4];
+	int* s12h = new int[12];
+	int* s12v = new int[12];
+	int* p2 = new int[9];
+	int* p3 = new int[4];
+	int* p12h = new int[12];
+	int* p12v = new int[12];
+
 
 	for(int i=0; i<3; i++){
 		for(int j=0; j<3; j++){
@@ -373,11 +401,13 @@ bool jkBoxFlat(JkBoxList* node){
 	s24a = (s12ha + s12va) / 24.0f;
 	p24a = (p12ha + p12va) / 24.0f;
 
-	if(s1a == 0 || s2a == 0 || s3a == 0 || s24a == 0)return false;
-	if(p1a == 0 || p2a == 0 || p3a == 0 || p24a == 0)return false;
+	if(s1a == 0 || s2a == 0 || s3a == 0 || s24a == 0){is_flat = false; goto clean;}
+	if(p1a == 0 || p2a == 0 || p3a == 0 || p24a == 0){is_flat = false; goto clean;}
 
-	double sd1 = 0, sd2 = 0, sd3 = 0, sd24 = 0;
-	double pd1 = 0, pd2 = 0, pd3 = 0, pd24 = 0;
+	double sd1, sd2, sd3, sd24;
+	double pd1, pd2, pd3, pd24;
+	sd1=sd2=sd3=sd24=0;
+	pd1=pd2=pd3=pd24=0;
 	for(int i=0; i<16; i++){
 		//printf("s1[%d]=%d\n",i,s1[i]);
 		sd1 += (s1[i]-s1a)*(s1[i]-s1a);
@@ -426,8 +456,9 @@ bool jkBoxFlat(JkBoxList* node){
 	printf("pd24,p24a=%f,%f,%f\n",pd24,p24a,pd24/p24a);
 #endif
 
-	double score1 = (sd1/s1a) + (sd2/s2a) + (sd3/s3a) + (sd24/s24a);
-	double score2 = (pd1/p1a) + 2*(pd2/p2a) + 5*(pd3/p3a) + (pd24/p24a);
+	double score1, score2;
+	score1 = (sd1/s1a) + (sd2/s2a) + (sd3/s3a) + (sd24/s24a);
+	score2 = (pd1/p1a) + 2*(pd2/p2a) + 5*(pd3/p3a) + (pd24/p24a);
 	if(score1>2.5 || (sd1/s1a)>0.9 || score2>1.6 || (pd1/p1a)>0.5 || (pd2/p2a)>0.35 || (pd3/p3a)>0.1 || (pd24/p24a)>0.5){
 		is_flat = false;
 #ifdef DEBUG
@@ -440,6 +471,7 @@ bool jkBoxFlat(JkBoxList* node){
 #endif
 	}
 
+clean:
 	delete [] s2;
 	delete [] s3;
 	delete [] s12h;
@@ -504,6 +536,7 @@ bool jkJudgeLayer(IplImage* img, CvMat* mask, JkBoxList* box_list, JkFeatureLaye
 		if(node->available){
 			if(jkBoxFlat(node)){
 #ifdef DEBUG
+				printf("xxxxxx this box is flat xxxxxx\n");
 				jkShowBox(img_layer, node->box);
 #endif
 				has_char = true;
@@ -545,11 +578,12 @@ bool jkBoxSizeSuitable(CvBox2D box, const IplImage* img){
 	float img_max = MAX(img->width, img->height);
 	float box_min = MIN(box.size.width, box.size.height);
 	float box_max = MAX(box.size.width, box.size.height);
-	if(box_min>5 && box_max>=img_max/15 && box_min<=img_max/2.5){
-		return true;
-	}
+	bool suitable = true;
+	if(box_min<15 || box_max<18) suitable = false;
+	if(box_max<img_max/15 || box_min>img_max/2.5) suitable = false;
+	if(box_min<20 && (box_max<20 || box_max>box_min*2)) suitable = false;
 
-	return false;
+	return suitable;
 }
 void jkSizeFilterBoxList(IplImage* img, JkBoxList* box_list){
 	for(JkBoxList* node = box_list; node!=NULL; node = node->next){
