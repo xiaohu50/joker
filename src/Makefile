@@ -1,5 +1,5 @@
 .PHONY: clean  clean_all  jk
-CFLAGS=-ggdb -lopencv_highgui -lopencv_core -lopencv_imgproc -DDEBUG
+CFLAGS=-ggdb -lopencv_highgui -lopencv_core -lopencv_imgproc 
 
 
 jk: jkColorCluster.o joke.o
